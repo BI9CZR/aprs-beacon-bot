@@ -65,6 +65,7 @@ Notes:
 - Each JSON object is one complete station record.
 - All station-specific information (callsign, SSID, passcode, coordinates, comment) is maintained in a single object.
 - Coordinates should preferably be stored as `ddmm.mmmm` strings with hemisphere suffix.
+- To keep a station in the JSON without sending it, set `"enabled": false`.
 - If a callsign should not use an SSID suffix, use an empty string: `""`.
 
 ## Optional Repository Variables

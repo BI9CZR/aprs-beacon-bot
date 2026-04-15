@@ -35,6 +35,7 @@ class Station:
     callsign: str
     ssid: str
     passcode: str
+    enabled: bool
     latitude: str
     longitude: str
     comment: str
@@ -85,6 +86,7 @@ def load_stations() -> list[Station]:
         callsign = item.get("callsign")
         ssid = item.get("ssid", "")
         passcode = item.get("passcode")
+        enabled = item.get("enabled", True)
         latitude = item.get("latitude")
         longitude = item.get("longitude")
 
@@ -94,6 +96,8 @@ def load_stations() -> list[Station]:
             raise ConfigError(f"Station {index} has an invalid SSID")
         if not isinstance(passcode, str) or not passcode.strip():
             raise ConfigError(f"Station {index} has an invalid passcode")
+        if not isinstance(enabled, bool):
+            raise ConfigError(f"Station {index} enabled must be true or false")
 
         comment = str(item.get("comment", "")).strip()
         destination = str(item.get("destination", default_destination)).strip() or default_destination
@@ -116,6 +120,7 @@ def load_stations() -> list[Station]:
                 callsign=callsign,
                 ssid=ssid,
                 passcode=passcode,
+                enabled=enabled,
                 latitude=latitude_value,
                 longitude=longitude_value,
                 comment=comment,
@@ -232,6 +237,8 @@ def main() -> int:
         print(f"Configuration error: {exc}", file=sys.stderr)
         return 1
 
+    active_stations = [station for station in stations if station.enabled]
+
     server = os.getenv("APRS_SERVER", DEFAULT_SERVER).strip() or DEFAULT_SERVER
     version = os.getenv("APRS_LOGIN_VERSION", "aprs-beacon-bot/1.0").strip() or "aprs-beacon-bot/1.0"
 
@@ -242,12 +249,16 @@ def main() -> int:
         return 1
 
     if args.validate_only:
-        print(f"Validated {len(stations)} station(s).")
-        for station in stations:
+        print(f"Validated {len(stations)} station(s), {len(active_stations)} enabled.")
+        for station in active_stations:
             print(f"{station.source}: {station.packet(station.source)}")
         return 0
 
-    for station in stations:
+    if not active_stations:
+        print("No enabled stations configured. Nothing to send.")
+        return 0
+
+    for station in active_stations:
         print(f"Connecting to {server}:{port} for {station.source}")
         try:
             send_station(station, server, port, version)
