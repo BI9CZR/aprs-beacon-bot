@@ -6,115 +6,188 @@ This repository uses GitHub Actions to send scheduled APRS-IS position beacons.
 
 - Scheduled beacon transmission with GitHub Actions
 - Multiple callsigns, multiple SSIDs, and multiple positions
-- Station configuration stored in GitHub Repository Variables
-- WGS-84 coordinate support in `ddmm.mmmm` format
+- Station configuration stored in a single GitHub Repository Variable
+- WGS-84 coordinates in APRS `ddmm.mmmm` format
 - No third-party Python dependencies
 
-## Coordinate System
+## Quick Start
 
-All coordinates should use WGS-84 APRS-style degree-minute strings:
+1. Fork or clone this repository.
+2. Go to **Settings → Secrets and variables → Actions → Variables** and create `APRS_CALLSIGNS_JSON` with your station array (see [Station Fields](#station-fields) below).
+3. The workflow runs automatically every hour. You can also trigger it manually from the **Actions** tab.
 
-- Latitude: `DDMM.MMMMN` or `DDMM.MMMMS`
-- Longitude: `DDDMM.MMMME` or `DDDMM.MMMMW`
+## Repository Variables
 
-Example: Shanghai -> `"latitude": "3113.8240N", "longitude": "12128.4220E"`
+### Required
 
-Decimal degrees are still accepted for backward compatibility, but the preferred JSON format is `ddmm.mmmm` with hemisphere suffix.
+| Variable | Description |
+|---|---|
+| `APRS_CALLSIGNS_JSON` | Station configuration as a JSON array (see below) |
 
-## GitHub Repository Variables
+### Optional
 
-Create this repository variable:
+| Variable | Default | Description |
+|---|---|---|
+| `APRS_SERVER` | `rotate.aprs2.net` | Global APRS-IS server address |
+| `APRS_PORT` | `14580` | Global APRS-IS port |
+| `APRS_LOGIN_VERSION` | `aprs-beacon-bot/1.0` | Client version string sent on login |
+| `APRS_DEFAULT_DESTINATION` | `APRS` | Default destination field for all stations |
+| `APRS_DEFAULT_PATH` | `TCPIP*` | Default digipeater path for all stations |
 
-- `APRS_CALLSIGNS_JSON` (required) - Station configuration as JSON array
+## Station Fields
 
-Example value:
+Each object in the `APRS_CALLSIGNS_JSON` array represents one station.
+
+### Required fields
+
+| Field | Type | Description |
+|---|---|---|
+| `callsign` | string | Amateur radio callsign, e.g. `"N0CALL"` |
+| `ssid` | string | SSID suffix as a string; use `""` for no suffix |
+| `passcode` | string | APRS-IS passcode for this callsign |
+| `latitude` | string \| number | WGS-84 latitude in `DDMM.MMMMN/S` format, e.g. `"4807.0380N"` |
+| `longitude` | string \| number | WGS-84 longitude in `DDDMM.MMMME/W` format, e.g. `"01134.0360E"` |
+
+### Optional fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `name` | string | `station-{index}` | Human-readable label used in logs |
+| `enabled` | bool | `true` | Set to `false` to keep the config but skip sending |
+| `comment` | string | `""` | Free-text comment appended to the packet |
+| `destination` | string | `APRS` (or `APRS_DEFAULT_DESTINATION`) | APRS destination field |
+| `path` | string | `TCPIP*` (or `APRS_DEFAULT_PATH`) | Digipeater path |
+| `symbol_table` | string | `"/"` | APRS symbol table identifier (single character) |
+| `symbol_code` | string | `">"` | APRS symbol code (single character) |
+| `messaging_capable` | bool | `false` | `true` sets the data type identifier to `=` (message-capable); `false` uses `!` |
+| `course` | integer | — | Course in degrees (0–360). Used with `speed` to form the `CSE/SPD` extension |
+| `speed` | integer | — | Speed in knots (0–999). Used with `course` to form the `CSE/SPD` extension |
+| `altitude` | number | — | Altitude in **meters** (WGS-84). Encoded as `/A=xxxxxx` feet in the packet |
+| `phg` | string | `""` | PHG extension: 4-digit string, e.g. `"5132"` → appends `PHG5132` |
+| `rng` | string | `""` | Omni range: 4-digit string in miles, e.g. `"0050"` → appends `RNG0050` |
+| `server` | string | `""` | Per-station APRS-IS server, overrides `APRS_SERVER` |
+| `port` | integer | — | Per-station APRS-IS port, overrides `APRS_PORT` |
+
+**Mutual exclusion:** `phg`, `rng`, and `course`/`speed` are three separate extension groups. Only one group may be set per station.
+
+## APRS_CALLSIGNS_JSON Examples
+
+### Minimal station (fixed position, no extension)
 
 ```json
 [
   {
-    "name": "home-mobile",
-    "callsign": "BI9XXX",
-    "ssid": "9",
-    "passcode": "12345",
-    "latitude": "3113.8240N",
-    "longitude": "12128.4220E",
-    "comment": "Home beacon",
-    "destination": "APRS",
-    "path": "TCPIP*",
-    "symbol_table": "/",
-    "symbol_code": ">"
-  },
-  {
-    "name": "remote-station",
-    "callsign": "BI9YYY",
+    "callsign": "N0CALL",
     "ssid": "",
-    "passcode": "23456",
-    "latitude": "3954.2520N",
-    "longitude": "11624.4440E",
-    "comment": "Remote site",
-    "destination": "APRS",
-    "path": "TCPIP*",
-    "symbol_table": "/",
-    "symbol_code": "r"
+    "passcode": "00000",
+    "latitude": "4807.0380N",
+    "longitude": "01134.0360E"
   }
 ]
 ```
 
-Notes:
+### Full-featured example
 
-- Each JSON object is one complete station record.
-- All station-specific information (callsign, SSID, passcode, coordinates, comment) is maintained in a single object.
-- Coordinates should preferably be stored as `ddmm.mmmm` strings with hemisphere suffix.
-- To keep a station in the JSON without sending it, set `"enabled": false`.
-- If a callsign should not use an SSID suffix, use an empty string: `""`.
+```json
+[
+  {
+    "name": "Home",
+    "callsign": "N0CALL",
+    "ssid": "",
+    "passcode": "00000",
+    "latitude": "4807.0380N",
+    "longitude": "01134.0360E",
+    "comment": "Home beacon",
+    "symbol_table": "/",
+    "symbol_code": "-"
+  },
+  {
+    "name": "Digipeater",
+    "callsign": "N0CALL",
+    "ssid": "8",
+    "passcode": "00000",
+    "latitude": "4807.0380N",
+    "longitude": "01134.0360E",
+    "comment": "Digi",
+    "symbol_table": "/",
+    "symbol_code": "#",
+    "phg": "5132"
+  },
+  {
+    "name": "Mobile",
+    "callsign": "N0CALL",
+    "ssid": "9",
+    "passcode": "00000",
+    "latitude": "4807.0380N",
+    "longitude": "01134.0360E",
+    "comment": "Mobile",
+    "symbol_table": "/",
+    "symbol_code": ">",
+    "messaging_capable": true,
+    "course": 90,
+    "speed": 30,
+    "altitude": 500
+  },
+  {
+    "name": "Remote",
+    "callsign": "N0CALL",
+    "ssid": "2",
+    "passcode": "00000",
+    "enabled": false,
+    "latitude": "5130.0200N",
+    "longitude": "00007.4900W",
+    "comment": "Remote site (disabled)",
+    "server": "euro.aprs2.net",
+    "port": 14580
+  }
+]
+```
 
-## Optional Repository Variables
+## Coordinate Format
 
-Create these variables if you need to override defaults:
+Coordinates use WGS-84 in APRS degree-minute format:
 
-- `APRS_SERVER` - default `rotate.aprs2.net`
-- `APRS_PORT` - default `14580`
-- `APRS_LOGIN_VERSION` - default `aprs-beacon-bot/1.0`
-- `APRS_DEFAULT_DESTINATION` - default `APRS`
-- `APRS_DEFAULT_PATH` - default `TCPIP*`
+- Latitude: `DDMM.MMMMN` or `DDMM.MMMMS`
+- Longitude: `DDDMM.MMMME` or `DDDMM.MMMMW`
 
-## Workflow schedule
+Decimal degrees are accepted for backward compatibility but string format is preferred.
 
-The workflow runs every hour and also supports manual trigger.
+### Conversion reference
 
-To change the schedule, edit [`.github/workflows/aprs-beacon.yml`](.github/workflows/aprs-beacon.yml).
+| Input | JSON value |
+|---|---|
+| `48^07.04N` (Direwolf) | `"4807.0380N"` |
+| `011^34.04E` (Direwolf) | `"01134.0360E"` |
+| 48.11730°N (decimal) | `"4807.0380N"` |
 
-## Local validation
+**Decimal degrees → ddmm.mmmm:**
 
-You can validate the configuration format without sending packets:
+```
+degrees = int(decimal)
+minutes = (decimal - degrees) * 60
+→ format as DDMM.MMMM + hemisphere
+```
+
+**Degree-Minute text → decimal degrees:**
+
+```
+decimal = degrees + minutes / 60
+Example: 48°07.04'N = 48 + 7.04/60 = 48.11733°N
+```
+
+## Workflow Schedule
+
+The workflow runs every hour and also supports manual dispatch.
+
+To change the schedule, edit [.github/workflows/aprs-beacon.yml](.github/workflows/aprs-beacon.yml).
+
+## Local Validation
+
+Validate your configuration without sending any packets:
 
 ```bash
-export APRS_CALLSIGNS_JSON='[{"name":"test-station","callsign":"BI9XXX","ssid":"1","passcode":"12345","latitude":"3113.8240N","longitude":"12128.4220E","comment":"Test","symbol_table":"/","symbol_code":">"}]'
-python scripts/send_aprs_beacons.py --validate-only
+export APRS_CALLSIGNS_JSON='[{"callsign":"N0CALL","ssid":"","passcode":"00000","latitude":"4807.0380N","longitude":"01134.0360E"}]'
+python3 scripts/send_aprs_beacons.py --validate-only
 ```
 
-## Coordinate Conversion Reference
-
-If you already have Direwolf-style coordinates such as `34^12.98N`, rewrite them as `3412.9800N`.
-
-If you need to convert decimal degrees to `ddmm.mmmm`, use:
-
-```
-degrees = int(decimal_degrees)
-minutes = (decimal_degrees - degrees) * 60
-```
-
-Then format them as `DDMM.MMMM` for latitude or `DDDMM.MMMM` for longitude and append the hemisphere.
-
-If you need decimal degrees from Degree-Minute text, use:
-
-```
-decimal_degrees = degrees + minutes / 60
-```
-
-Example: 34°12.98'N = 34 + 12.98/60 = 34.21633°N
-
-Preferred JSON examples:
-
-- `34^12.98N` -> `3412.9800N`
-- `108^53.61E` -> `10853.6100E`
+Output shows the total number of stations, how many are enabled, and the rendered APRS packet for each enabled station.

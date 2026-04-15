@@ -43,6 +43,14 @@ class Station:
     path: str
     symbol_table: str
     symbol_code: str
+    messaging_capable: bool = False
+    course: int | None = None
+    speed: int | None = None
+    altitude: float | None = None
+    phg: str = ""
+    rng: str = ""
+    server: str = ""
+    port: int | None = None
 
     @property
     def source(self) -> str:
@@ -52,7 +60,24 @@ class Station:
         return f"{self.callsign.strip().upper()}-{ssid}"
 
     def packet(self, source: str) -> str:
-        info_field = f"!{self.latitude}{self.symbol_table}{self.longitude}{self.symbol_code}{self.comment}"
+        dti = "=" if self.messaging_capable else "!"
+
+        extension = ""
+        if self.phg:
+            extension = f"PHG{self.phg}"
+        elif self.rng:
+            extension = f"RNG{self.rng}"
+        elif self.course is not None or self.speed is not None:
+            course = self.course if self.course is not None else 0
+            speed = self.speed if self.speed is not None else 0
+            extension = f"{course:03d}/{speed:03d}"
+
+        altitude_str = ""
+        if self.altitude is not None:
+            feet = round(self.altitude * 3.28084)
+            altitude_str = f"/A={feet:06d}"
+
+        info_field = f"{dti}{self.latitude}{self.symbol_table}{self.longitude}{self.symbol_code}{extension}{altitude_str}{self.comment}"
         return f"{source}>{self.destination},{self.path}:{info_field}"
 
 
@@ -108,6 +133,48 @@ def load_stations() -> list[Station]:
         if len(symbol_table) != 1 or len(symbol_code) != 1:
             raise ConfigError(f"Station {index} symbol_table and symbol_code must be single characters")
 
+        messaging_capable = item.get("messaging_capable", False)
+        if not isinstance(messaging_capable, bool):
+            raise ConfigError(f"Station {index} messaging_capable must be true or false")
+
+        course_raw = item.get("course")
+        if course_raw is not None:
+            if not isinstance(course_raw, int) or not 0 <= course_raw <= 360:
+                raise ConfigError(f"Station {index} course must be an integer 0-360")
+        course = course_raw
+
+        speed_raw = item.get("speed")
+        if speed_raw is not None:
+            if not isinstance(speed_raw, int) or not 0 <= speed_raw <= 999:
+                raise ConfigError(f"Station {index} speed must be an integer 0-999")
+        speed = speed_raw
+
+        altitude_raw = item.get("altitude")
+        if altitude_raw is not None and not isinstance(altitude_raw, (int, float)):
+            raise ConfigError(f"Station {index} altitude must be a number (meters)")
+        altitude = float(altitude_raw) if altitude_raw is not None else None
+
+        phg = str(item.get("phg", "")).strip()
+        if phg and not re.fullmatch(r"\d{4}", phg):
+            raise ConfigError(f"Station {index} phg must be 4 digits (e.g. '5132')")
+
+        rng = str(item.get("rng", "")).strip()
+        if rng and not re.fullmatch(r"\d{4}", rng):
+            raise ConfigError(f"Station {index} rng must be 4 digits (e.g. '0050')")
+
+        if phg and rng:
+            raise ConfigError(f"Station {index} phg and rng cannot both be set")
+        if (phg or rng) and (course is not None or speed is not None):
+            raise ConfigError(f"Station {index} phg/rng and course/speed cannot both be set")
+
+        station_server = str(item.get("server", "")).strip()
+        station_port_raw = item.get("port")
+        station_port: int | None = None
+        if station_port_raw is not None:
+            if not isinstance(station_port_raw, int) or not 1 <= station_port_raw <= 65535:
+                raise ConfigError(f"Station {index} port must be an integer 1-65535")
+            station_port = station_port_raw
+
         try:
             latitude_value = normalize_latitude(latitude)
             longitude_value = normalize_longitude(longitude)
@@ -128,6 +195,14 @@ def load_stations() -> list[Station]:
                 path=path,
                 symbol_table=symbol_table,
                 symbol_code=symbol_code,
+                messaging_capable=messaging_capable,
+                course=course,
+                speed=speed,
+                altitude=altitude,
+                phg=phg,
+                rng=rng,
+                server=station_server,
+                port=station_port,
             )
         )
 
@@ -207,7 +282,9 @@ def format_longitude(longitude: float) -> str:
     return f"{degrees:03d}{minutes:07.4f}{hemisphere}"
 
 
-def send_station(station: Station, server: str, port: int, version: str) -> None:
+def send_station(station: Station, global_server: str, global_port: int, version: str) -> None:
+    server = station.server or global_server
+    port = station.port if station.port is not None else global_port
     login_line = f"user {station.source} pass {station.passcode} vers {version}\n"
 
     with socket.create_connection((server, port), timeout=SOCKET_TIMEOUT_SECONDS) as connection:
@@ -259,7 +336,9 @@ def main() -> int:
         return 0
 
     for station in active_stations:
-        print(f"Connecting to {server}:{port} for {station.source}")
+        effective_server = station.server or server
+        effective_port = station.port if station.port is not None else port
+        print(f"Connecting to {effective_server}:{effective_port} for {station.source}")
         try:
             send_station(station, server, port, version)
         except OSError as exc:
