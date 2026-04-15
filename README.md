@@ -7,7 +7,19 @@ This repository uses GitHub Actions to send scheduled APRS-IS position beacons.
 - Scheduled beacon transmission with GitHub Actions
 - Multiple callsigns, multiple SSIDs, and multiple positions
 - Station configuration stored in GitHub Repository Variables
+- WGS-84 coordinate support in `ddmm.mmmm` format
 - No third-party Python dependencies
+
+## Coordinate System
+
+All coordinates should use WGS-84 APRS-style degree-minute strings:
+
+- Latitude: `DDMM.MMMMN` or `DDMM.MMMMS`
+- Longitude: `DDDMM.MMMME` or `DDDMM.MMMMW`
+
+Example: Shanghai -> `"latitude": "3113.8240N", "longitude": "12128.4220E"`
+
+Decimal degrees are still accepted for backward compatibility, but the preferred JSON format is `ddmm.mmmm` with hemisphere suffix.
 
 ## GitHub Repository Variables
 
@@ -24,8 +36,8 @@ Example value:
     "callsign": "BI9XXX",
     "ssid": "9",
     "passcode": "12345",
-    "latitude": 31.2304,
-    "longitude": 121.4737,
+    "latitude": "3113.8240N",
+    "longitude": "12128.4220E",
     "comment": "Home beacon",
     "destination": "APRS",
     "path": "TCPIP*",
@@ -37,8 +49,8 @@ Example value:
     "callsign": "BI9YYY",
     "ssid": "",
     "passcode": "23456",
-    "latitude": 39.9042,
-    "longitude": 116.4074,
+    "latitude": "3954.2520N",
+    "longitude": "11624.4440E",
     "comment": "Remote site",
     "destination": "APRS",
     "path": "TCPIP*",
@@ -52,6 +64,7 @@ Notes:
 
 - Each JSON object is one complete station record.
 - All station-specific information (callsign, SSID, passcode, coordinates, comment) is maintained in a single object.
+- Coordinates should preferably be stored as `ddmm.mmmm` strings with hemisphere suffix.
 - If a callsign should not use an SSID suffix, use an empty string: `""`.
 
 ## Optional Repository Variables
@@ -75,6 +88,32 @@ To change the schedule, edit [`.github/workflows/aprs-beacon.yml`](.github/workf
 You can validate the configuration format without sending packets:
 
 ```bash
-export APRS_CALLSIGNS_JSON='[{"name":"test-station","callsign":"BI9XXX","ssid":"1","passcode":"12345","latitude":31.2304,"longitude":121.4737,"comment":"Test","symbol_table":"/","symbol_code":">"}]'
+export APRS_CALLSIGNS_JSON='[{"name":"test-station","callsign":"BI9XXX","ssid":"1","passcode":"12345","latitude":"3113.8240N","longitude":"12128.4220E","comment":"Test","symbol_table":"/","symbol_code":">"}]'
 python scripts/send_aprs_beacons.py --validate-only
 ```
+
+## Coordinate Conversion Reference
+
+If you already have Direwolf-style coordinates such as `34^12.98N`, rewrite them as `3412.9800N`.
+
+If you need to convert decimal degrees to `ddmm.mmmm`, use:
+
+```
+degrees = int(decimal_degrees)
+minutes = (decimal_degrees - degrees) * 60
+```
+
+Then format them as `DDMM.MMMM` for latitude or `DDDMM.MMMM` for longitude and append the hemisphere.
+
+If you need decimal degrees from Degree-Minute text, use:
+
+```
+decimal_degrees = degrees + minutes / 60
+```
+
+Example: 34°12.98'N = 34 + 12.98/60 = 34.21633°N
+
+Preferred JSON examples:
+
+- `34^12.98N` -> `3412.9800N`
+- `108^53.61E` -> `10853.6100E`

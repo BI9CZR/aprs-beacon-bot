@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
+"""
+APRS-IS Beacon Sender - GitHub Actions.
+
+Coordinates may be provided as either:
+- APRS-style degree-minute strings: DDMM.MMMMN / DDDMM.MMMME
+- WGS-84 decimal degrees, which are converted internally
+"""
+
 import argparse
 import json
 import os
+import re
 import socket
 import sys
 from dataclasses import dataclass
@@ -26,8 +35,8 @@ class Station:
     callsign: str
     ssid: str
     passcode: str
-    latitude: float
-    longitude: float
+    latitude: str
+    longitude: str
     comment: str
     destination: str
     path: str
@@ -42,9 +51,7 @@ class Station:
         return f"{self.callsign.strip().upper()}-{ssid}"
 
     def packet(self, source: str) -> str:
-        latitude = format_latitude(self.latitude)
-        longitude = format_longitude(self.longitude)
-        info_field = f"!{latitude}{self.symbol_table}{longitude}{self.symbol_code}{self.comment}"
+        info_field = f"!{self.latitude}{self.symbol_table}{self.longitude}{self.symbol_code}{self.comment}"
         return f"{source}>{self.destination},{self.path}:{info_field}"
 
 
@@ -98,12 +105,11 @@ def load_stations() -> list[Station]:
             raise ConfigError(f"Station {index} symbol_table and symbol_code must be single characters")
 
         try:
-            latitude_value = float(latitude)
-            longitude_value = float(longitude)
-        except (TypeError, ValueError) as exc:
-            raise ConfigError(f"Station {index} latitude and longitude must be numeric") from exc
+            latitude_value = normalize_latitude(latitude)
+            longitude_value = normalize_longitude(longitude)
+        except ConfigError as exc:
+            raise ConfigError(f"Station {index} {exc}") from exc
 
-        validate_coordinates(latitude_value, longitude_value, index)
         stations.append(
             Station(
                 name=name,
@@ -126,11 +132,58 @@ def load_stations() -> list[Station]:
     return stations
 
 
-def validate_coordinates(latitude: float, longitude: float, beacon_index: int) -> None:
+def validate_coordinates(latitude: float, longitude: float, station_index: int) -> None:
     if not -90 <= latitude <= 90:
-        raise ConfigError(f"Beacon {beacon_index} latitude out of range: {latitude}")
+        raise ConfigError(f"Station {station_index} latitude out of range: {latitude}")
     if not -180 <= longitude <= 180:
-        raise ConfigError(f"Beacon {beacon_index} longitude out of range: {longitude}")
+        raise ConfigError(f"Station {station_index} longitude out of range: {longitude}")
+
+
+def normalize_latitude(value: Any) -> str:
+    if isinstance(value, (int, float)):
+        latitude = float(value)
+        validate_coordinates(latitude, 0.0, 0)
+        return format_latitude(latitude)
+    if isinstance(value, str):
+        return validate_coordinate_string(value, is_latitude=True)
+    raise ConfigError("latitude must be numeric or match DDMM.MMMMN/S")
+
+
+def normalize_longitude(value: Any) -> str:
+    if isinstance(value, (int, float)):
+        longitude = float(value)
+        validate_coordinates(0.0, longitude, 0)
+        return format_longitude(longitude)
+    if isinstance(value, str):
+        return validate_coordinate_string(value, is_latitude=False)
+    raise ConfigError("longitude must be numeric or match DDDMM.MMMME/W")
+
+
+def validate_coordinate_string(value: str, is_latitude: bool) -> str:
+    normalized = value.strip().upper()
+    pattern = r"^\d{4}\.\d{4}[NS]$" if is_latitude else r"^\d{5}\.\d{4}[EW]$"
+    coordinate_name = "latitude" if is_latitude else "longitude"
+    expected = "DDMM.MMMMN/S" if is_latitude else "DDDMM.MMMME/W"
+
+    if not re.fullmatch(pattern, normalized):
+        raise ConfigError(f"{coordinate_name} must match {expected}")
+
+    degree_digits = 2 if is_latitude else 3
+    degrees = int(normalized[:degree_digits])
+    minutes = float(normalized[degree_digits:-1])
+
+    if minutes >= 60:
+        raise ConfigError(f"{coordinate_name} minutes must be less than 60")
+    if is_latitude and degrees > 90:
+        raise ConfigError(f"latitude degrees out of range: {degrees}")
+    if not is_latitude and degrees > 180:
+        raise ConfigError(f"longitude degrees out of range: {degrees}")
+    if is_latitude and degrees == 90 and minutes != 0:
+        raise ConfigError("latitude 90 degrees must have 00.0000 minutes")
+    if not is_latitude and degrees == 180 and minutes != 0:
+        raise ConfigError("longitude 180 degrees must have 00.0000 minutes")
+
+    return normalized
 
 
 def format_latitude(latitude: float) -> str:
@@ -138,7 +191,7 @@ def format_latitude(latitude: float) -> str:
     absolute = abs(latitude)
     degrees = int(absolute)
     minutes = (absolute - degrees) * 60
-    return f"{degrees:02d}{minutes:05.2f}{hemisphere}"
+    return f"{degrees:02d}{minutes:07.4f}{hemisphere}"
 
 
 def format_longitude(longitude: float) -> str:
@@ -146,7 +199,7 @@ def format_longitude(longitude: float) -> str:
     absolute = abs(longitude)
     degrees = int(absolute)
     minutes = (absolute - degrees) * 60
-    return f"{degrees:03d}{minutes:05.2f}{hemisphere}"
+    return f"{degrees:03d}{minutes:07.4f}{hemisphere}"
 
 
 def send_station(station: Station, server: str, port: int, version: str) -> None:
