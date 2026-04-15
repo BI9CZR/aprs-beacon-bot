@@ -6,15 +6,14 @@ This repository uses GitHub Actions to send scheduled APRS-IS position beacons.
 
 - Scheduled beacon transmission with GitHub Actions
 - Multiple callsigns, multiple SSIDs, and multiple positions
-- Credentials stored in GitHub Secrets
-- Beacon content stored in GitHub Repository Variables
+- Station configuration stored in GitHub Repository Variables
 - No third-party Python dependencies
 
-## GitHub Secrets
+## GitHub Repository Variables
 
-Create this repository secret:
+Create this repository variable:
 
-- `APRS_CALLSIGNS_JSON`
+- `APRS_CALLSIGNS_JSON` (required) - Station configuration as JSON array
 
 Example value:
 
@@ -52,23 +51,18 @@ Example value:
 Notes:
 
 - Each JSON object is one complete station record.
-- `callsign`、`ssid`、`passcode`、坐标、`comment` 等信息都维护在同一个对象中。
+- All station-specific information (callsign, SSID, passcode, coordinates, comment) is maintained in a single object.
 - If a callsign should not use an SSID suffix, use an empty string: `""`.
 
-## GitHub Repository Variables
+## Optional Repository Variables
 
-Create these repository variables if needed:
+Create these variables if you need to override defaults:
 
-- `APRS_SERVER` optional, default `rotate.aprs2.net`
-- `APRS_PORT` optional, default `14580`
-- `APRS_LOGIN_VERSION` optional, default `aprs-beacon-bot/1.0`
-- `APRS_DEFAULT_DESTINATION` optional, default `APRS`
-- `APRS_DEFAULT_PATH` optional, default `TCPIP*`
-
-Notes:
-
-- Station-specific content is now maintained in `APRS_CALLSIGNS_JSON`.
-- Repository variables are only used for optional global defaults.
+- `APRS_SERVER` - default `rotate.aprs2.net`
+- `APRS_PORT` - default `14580`
+- `APRS_LOGIN_VERSION` - default `aprs-beacon-bot/1.0`
+- `APRS_DEFAULT_DESTINATION` - default `APRS`
+- `APRS_DEFAULT_PATH` - default `TCPIP*`
 
 ## Workflow schedule
 
