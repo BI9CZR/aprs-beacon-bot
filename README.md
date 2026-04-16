@@ -55,7 +55,7 @@ Each object in the `APRS_CALLSIGNS_JSON` array represents one station.
 |---|---|---|---|
 | `name` | string | `station-{index}` | Human-readable label used in logs |
 | `enabled` | bool | `true` | Set to `false` to keep the config but skip sending |
-| `comment` | string | `""` | Free-text comment appended to the packet |
+| `comment` | string | `""` | Free-text comment appended to the packet,Support CHS display |
 | `destination` | string | `APRS` (or `APRS_DEFAULT_DESTINATION`) | APRS destination field |
 | `path` | string | `TCPIP*` (or `APRS_DEFAULT_PATH`) | Digipeater path |
 | `symbol_table` | string | `"/"` | APRS symbol table identifier (single character) |
@@ -206,3 +206,10 @@ python3 scripts/send_aprs_beacons.py --validate-only
 ```
 
 Output shows total stations, enabled stations, and rendered APRS packets for enabled entries.
+
+## Contributor
+<table>
+  <tr>
+    <td><a href="https://github.com/mixkover119"><img src="https://avatars.githubusercontent.com/u/68005040?v=4" width="100"><br>@BI9CXC</a></td>
+  </tr>
+</table>
