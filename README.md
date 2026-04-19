@@ -7,7 +7,6 @@ This repository uses GitHub Actions to send scheduled APRS-IS position beacons.
 - Scheduled beacon transmission with GitHub Actions
 - Multiple callsigns, multiple SSIDs, and multiple positions
 - Per-station enable/disable, APRS extensions, and server/port overrides
-- Fixed APRS TOCALL/device ID set in code to `AP9BBL`
 - Station configuration stored in a single GitHub Repository Variable
 - WGS-84 coordinate input in `ddmm.mmmm` format
 - Internal APRS-compatible coordinate conversion before send
@@ -40,8 +39,6 @@ This repository uses GitHub Actions to send scheduled APRS-IS position beacons.
 ## Station Fields
 
 Each object in the `APRS_CALLSIGNS_JSON` array represents one station.
-
-The APRS destination callsign (TOCALL/device ID) is fixed in code to `AP9BBL` and is not configurable from repository variables or station JSON.
 
 ### Required fields
 
